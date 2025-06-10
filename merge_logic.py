@@ -48,7 +48,7 @@ def process_files(excel_file, csv_files, json_files):
                             merged_df.at[i, f"{col}_{label}"] = row.get(col, None)
                     unmatched_data[label].drop(mfl_id, inplace=True, errors='ignore')
 
-        # --- JSON section (improved robustness) ---
+        # --- JSON section (robust matching and debug) ---
         json_data_by_label = {}
         for json_file in json_files:
             label = json_file.name.split('.')[0]
@@ -85,22 +85,34 @@ def process_files(excel_file, csv_files, json_files):
             json_df = pd.DataFrame(records).set_index(["overrideId", "date"])
             json_data_by_label[label] = json_df
 
-            # Debugging: print first few index keys for matching
-            # print("JSON DataFrame index:", list(json_df.index)[:10])
-            # print("Excel merge keys:", list(zip(merged_df["OVERRIDE ID"].astype(str).str.strip(), merged_df["match_date"].astype(str).str.strip()))[:10])
+            # --- Debugging block ---
+            print(f"\n--- DEBUG for JSON label '{label}' ---")
+            print("First 10 JSON keys:", list(json_df.index)[:10])
+            print("First 10 Excel merge keys:",
+                list(zip(merged_df["OVERRIDE ID"].astype(str).str.strip(), merged_df["match_date"].astype(str).str.strip()))[:10])
 
             for field in json_df.columns:
                 if field not in merged_df.columns:
                     merged_df[field] = None
 
+            match_count = 0
             for i in merged_df.index:
                 key = (str(merged_df.at[i, "OVERRIDE ID"]).strip(), str(merged_df.at[i, "match_date"]).strip())
+                if match_count < 10:  # only print for first few for clarity
+                    print(f"Trying key: {key}")
                 if key in json_df.index:
+                    if match_count < 10:
+                        print(f"JSON MATCH FOUND for key: {key}")
                     row = json_df.loc[key]
                     if isinstance(row, pd.DataFrame):
                         row = row.iloc[0]
                     for field in json_df.columns:
                         merged_df.at[i, field] = row.get(field, None)
+                    match_count += 1
+
+            print(f"Total JSON matches for '{label}': {match_count}")
+            if match_count == 0:
+                print(f"WARNING: No JSON data matched for '{label}'. Check your keys above for discrepancies!")
 
         merged_df.drop(columns=["match_date"], inplace=True)
 
