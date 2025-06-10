@@ -1,4 +1,3 @@
-# Full final version: CSV/JSON field-wise grouped + all summaries/unmatched/json sheets
 import pandas as pd
 import json
 from io import BytesIO
@@ -17,14 +16,12 @@ def process_files(excel_file, csv_files, json_files):
         excel_df = pd.read_excel(excel_file)
         excel_df["MFL ID"] = excel_df["MFL ID"].astype(str).str.strip()
         excel_df["OVERRIDE ID"] = excel_df["OVERRIDE ID"].astype(str).str.strip()
-        excel_df["DATE TIME PRE KO (UTC)"] = pd.to_datetime(excel_df["DATE TIME PRE KO (UTC)"], errors='coerce')
+        excel_df["DATE TIME PRE KO (UTC)"] = pd.to_datetime(excel_df["DATE TIME PRE KO (UTC)"], errors='coerce', dayfirst=True)
         excel_df["match_date"] = excel_df["DATE TIME PRE KO (UTC)"].dt.strftime("%Y-%m-%d")
 
         merged_df = excel_df.copy()
         csv_data = {}
         unmatched_data = {}
-        summary_data = []
-        consolidated_summary = {}
 
         for csv_file in csv_files:
             label = csv_file.name.split('.')[0]
@@ -51,19 +48,26 @@ def process_files(excel_file, csv_files, json_files):
                             merged_df.at[i, f"{col}_{label}"] = row.get(col, None)
                     unmatched_data[label].drop(mfl_id, inplace=True, errors='ignore')
 
-        # Add JSON
+        # --- JSON section (improved robustness) ---
         json_data_by_label = {}
         for json_file in json_files:
             label = json_file.name.split('.')[0]
             json_data = json.load(json_file)
             records = []
             for obj in json_data:
-                e = obj["event"]
+                e = obj.get("event", {})
+                override_id_list = e.get("overrideId", [])
+                override_id = (
+                    str(override_id_list[0].get("id")).strip()
+                    if override_id_list and "id" in override_id_list[0]
+                    else None
+                )
+                date_str = e.get("streamStartTime", "")[:10]
                 oa_id = e.get("oaId", "")
                 bcast = e.get("broadcasts", {}).get(oa_id, {})
                 records.append({
-                    "overrideId": e.get("overrideId", [{}])[0].get("id"),
-                    "date": e.get("streamStartTime", "")[:10],
+                    "overrideId": override_id,
+                    "date": date_str,
                     f"oaId_{label}": oa_id,
                     f"streamStartTime_{label}": e.get("streamStartTime", ""),
                     f"streamEndTime_{label}": e.get("streamEndTime", ""),
@@ -81,12 +85,16 @@ def process_files(excel_file, csv_files, json_files):
             json_df = pd.DataFrame(records).set_index(["overrideId", "date"])
             json_data_by_label[label] = json_df
 
+            # Debugging: print first few index keys for matching
+            # print("JSON DataFrame index:", list(json_df.index)[:10])
+            # print("Excel merge keys:", list(zip(merged_df["OVERRIDE ID"].astype(str).str.strip(), merged_df["match_date"].astype(str).str.strip()))[:10])
+
             for field in json_df.columns:
                 if field not in merged_df.columns:
                     merged_df[field] = None
 
             for i in merged_df.index:
-                key = (str(merged_df.at[i, "OVERRIDE ID"]).strip(), merged_df.at[i, "match_date"])
+                key = (str(merged_df.at[i, "OVERRIDE ID"]).strip(), str(merged_df.at[i, "match_date"]).strip())
                 if key in json_df.index:
                     row = json_df.loc[key]
                     if isinstance(row, pd.DataFrame):
@@ -96,7 +104,7 @@ def process_files(excel_file, csv_files, json_files):
 
         merged_df.drop(columns=["match_date"], inplace=True)
 
-        # ✅ Final column grouping by field name across labels
+        # Final column grouping by field name across labels
         all_labels = list(csv_data.keys()) + list(json_data_by_label.keys())
         excel_cols = [col for col in merged_df.columns if "_" not in col]
         grouped_cols = [col for col in merged_df.columns if "_" in col]
@@ -130,7 +138,7 @@ def process_files(excel_file, csv_files, json_files):
                     if val is None or str(val).strip() == "":
                         ws1.cell(row=row_idx, column=col_idx).fill = yellow_fill
 
-        # ✅ Summary
+        # Summary
         ws2 = wb.create_sheet("Summary")
         ws2.append(["File", "Type", "Total Rows", "Matched to Excel", "Extra", "Missing"])
         for label, df in csv_data.items():
@@ -148,7 +156,7 @@ def process_files(excel_file, csv_files, json_files):
             empty = sum(filtered[field].isna().sum() for field in filtered.columns)
             ws2.append([label, "JSON", total, total, "-", empty])
 
-        # ✅ Consolidated Summary
+        # Consolidated Summary
         ws3 = wb.create_sheet("Consolidated Summary")
         ws3.append(["Source", "File", "Field", "Matched", "Missing", "Mismatched"])
         for label, df in csv_data.items():
@@ -172,13 +180,13 @@ def process_files(excel_file, csv_files, json_files):
                 missing = total - non_empty
                 ws3.append(["JSON", label, field, non_empty, missing, "-"])
 
-        # ✅ Unmatched Sheets
+        # Unmatched Sheets
         for label, df in unmatched_data.items():
             ws = wb.create_sheet(f"Unmatched_{label}")
             for r in dataframe_to_rows(df.reset_index(drop=True), index=False, header=True):
                 ws.append(r)
 
-        # ✅ JSON Sheets
+        # JSON Sheets
         for label, json_df in json_data_by_label.items():
             df_reset = json_df.reset_index()
             filtered = df_reset[df_reset.apply(lambda x: (str(x["overrideId"]).strip(), str(x["date"]).strip()) in used_keys, axis=1)]
@@ -193,4 +201,3 @@ def process_files(excel_file, csv_files, json_files):
         import traceback
         traceback.print_exc()
         return None
-
