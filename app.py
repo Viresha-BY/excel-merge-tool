@@ -31,12 +31,14 @@ if not st.session_state['authenticated']:
 
 # --- rest of your app goes here, user is authenticated ---
 
+role = st.session_state["role"]   # <-- add this line
+
 st.header("Step 1: Upload Files")
 excel_file = st.file_uploader("Upload Excel File", type=["xlsx"])
 csv_files = st.file_uploader("Upload CSV Files", type=["csv"], accept_multiple_files=True)
 
 # Merge and store in session_state
-if token in ["operator", "admin"]:
+if role in ["operator", "admin"]:
     st.header("Step 2: Merge and Compare")
     if st.button("🔄 Start Merge"):
         if excel_file and csv_files:
@@ -56,7 +58,7 @@ if token in ["operator", "admin"]:
         else:
             st.warning("⚠️ Please upload all required files.")
 
-elif token == "view":
+elif role == "view":
     st.info("👁️ You have view-only access. Merge action is disabled.")
 
 # Always get merged_df from session_state so UI doesn't disappear on select
