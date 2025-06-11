@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 from merge_csv_only import process_files
-from access_control_password import get_user_role
+from access_control_password import verify_user
 
 st.set_page_config(page_title="Excel Merge Tool (CSV Only, Roles)", layout="wide")
 st.title("📘 Excel Merge Tool (CSV Only + Roles)")
