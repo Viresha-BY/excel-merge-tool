@@ -18,7 +18,7 @@ with st.sidebar:
             st.session_state['username'] = ""
             st.session_state['merged_excel_bytes'] = None
             st.session_state['merged_df'] = None
-            st.experimental_rerun()
+            st.rerun()
     else:
         st.info("Please login to access the tool.")
 
@@ -42,7 +42,7 @@ if not st.session_state.get("authenticated", False):
             st.session_state['role'] = role
             st.session_state['username'] = username
             st.success(f"Logged in as {username} ({role})")
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.error("Invalid username or password")
     st.stop()
