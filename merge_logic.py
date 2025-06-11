@@ -4,18 +4,36 @@ from io import BytesIO
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
-from openpyxl.worksheet.table import Table, TableStyleInfo
 from collections import defaultdict
 
 red_fill = PatternFill(start_color="FFFF6666", end_color="FFFF6666", fill_type="solid")
 yellow_fill = PatternFill(start_color="FFFFFF00", end_color="FFFFFF00", fill_type="solid")
 green_fill = PatternFill(start_color="CCFFCC", end_color="CCFFCC", fill_type="solid")
 
+def _is_invalid_key(val):
+    try:
+        return pd.isna(val) or str(val).strip().lower() in ("", "nan", "none")
+    except Exception:
+        return True
+
+def clean_override_id(val):
+    # Converts float strings like '1627.0' to '1627'
+    try:
+        f = float(val)
+        i = int(f)
+        if f == i:
+            return str(i)
+        else:
+            return str(val).strip()
+    except Exception:
+        return str(val).strip()
+
 def process_files(excel_file, csv_files, json_files):
     try:
         excel_df = pd.read_excel(excel_file)
-        excel_df["MFL ID"] = excel_df["MFL ID"].astype(str).str.strip()
-        excel_df["OVERRIDE ID"] = excel_df["OVERRIDE ID"].astype(str).str.strip()
+        # Clean OVERRIDE ID to always be a string with no .0 decimal
+        excel_df["MFL ID"] = excel_df["MFL ID"].apply(clean_override_id)
+        excel_df["OVERRIDE ID"] = excel_df["OVERRIDE ID"].apply(clean_override_id)
         excel_df["DATE TIME PRE KO (UTC)"] = pd.to_datetime(excel_df["DATE TIME PRE KO (UTC)"], errors='coerce', dayfirst=True)
         excel_df["match_date"] = excel_df["DATE TIME PRE KO (UTC)"].dt.strftime("%Y-%m-%d")
 
@@ -26,18 +44,26 @@ def process_files(excel_file, csv_files, json_files):
         for csv_file in csv_files:
             label = csv_file.name.split('.')[0]
             df = pd.read_csv(csv_file)
-            df["clientContentId"] = df["clientContentId"].astype(str).str.strip()
+            df["clientContentId"] = df["clientContentId"].apply(clean_override_id)
             df.set_index("clientContentId", inplace=True, drop=False)
             csv_data[label] = df
             unmatched_data[label] = df.copy()
 
+        # Batch-add all CSV columns for each label
+        all_new_cols = []
         for label, df in csv_data.items():
             for col in df.columns:
                 if col not in ("competitionId", "Day", "launchPeriod", "rightsId", "Source"):
-                    merged_df[f"{col}_{label}"] = None
+                    all_new_cols.append(f"{col}_{label}")
+        # Only add columns that don't already exist
+        new_cols_to_add = [c for c in all_new_cols if c not in merged_df.columns]
+        if new_cols_to_add:
+            merged_df = pd.concat([merged_df, pd.DataFrame({col: None for col in new_cols_to_add}, index=merged_df.index)], axis=1)
 
         for i in merged_df.index:
             mfl_id = merged_df.at[i, "MFL ID"]
+            if _is_invalid_key(mfl_id):
+                continue
             for label, df in csv_data.items():
                 if mfl_id in df.index:
                     row = df.loc[mfl_id]
@@ -48,7 +74,7 @@ def process_files(excel_file, csv_files, json_files):
                             merged_df.at[i, f"{col}_{label}"] = row.get(col, None)
                     unmatched_data[label].drop(mfl_id, inplace=True, errors='ignore')
 
-        # --- JSON section (robust matching and debug) ---
+        # --- JSON section ---
         json_data_by_label = {}
         for json_file in json_files:
             label = json_file.name.split('.')[0]
@@ -58,8 +84,8 @@ def process_files(excel_file, csv_files, json_files):
                 e = obj.get("event", {})
                 override_id_list = e.get("overrideId", [])
                 override_id = (
-                    str(override_id_list[0].get("id")).strip()
-                    if override_id_list and "id" in override_id_list[0]
+                    clean_override_id(override_id_list[0].get("id"))
+                    if override_id_list and isinstance(override_id_list[0], dict) and "id" in override_id_list[0]
                     else None
                 )
                 date_str = e.get("streamStartTime", "")[:10]
@@ -83,7 +109,13 @@ def process_files(excel_file, csv_files, json_files):
                     f"description_{label}": e.get("description", "")
                 })
             json_df = pd.DataFrame(records).set_index(["overrideId", "date"])
+            json_df = json_df.sort_index()  # Helps with MultiIndex performance
             json_data_by_label[label] = json_df
+
+            # Batch-add all new JSON columns
+            new_json_cols = [field for field in json_df.columns if field not in merged_df.columns]
+            if new_json_cols:
+                merged_df = pd.concat([merged_df, pd.DataFrame({col: None for col in new_json_cols}, index=merged_df.index)], axis=1)
 
             # --- Debugging block ---
             print(f"\n--- DEBUG for JSON label '{label}' ---")
@@ -91,14 +123,17 @@ def process_files(excel_file, csv_files, json_files):
             print("First 10 Excel merge keys:",
                 list(zip(merged_df["OVERRIDE ID"].astype(str).str.strip(), merged_df["match_date"].astype(str).str.strip()))[:10])
 
-            for field in json_df.columns:
-                if field not in merged_df.columns:
-                    merged_df[field] = None
-
             match_count = 0
             for i in merged_df.index:
-                key = (str(merged_df.at[i, "OVERRIDE ID"]).strip(), str(merged_df.at[i, "match_date"]).strip())
-                if match_count < 10:  # only print for first few for clarity
+                override_id = merged_df.at[i, "OVERRIDE ID"]
+                match_date = str(merged_df.at[i, "match_date"]).strip()
+                # Skip nan/None/empty keys
+                if _is_invalid_key(override_id) or _is_invalid_key(match_date):
+                    if match_count < 10:
+                        print(f"SKIPPING invalid key: ({override_id}, {match_date})")
+                    continue
+                key = (override_id, match_date)
+                if match_count < 10:
                     print(f"Trying key: {key}")
                 if key in json_df.index:
                     if match_count < 10:
@@ -174,42 +209,31 @@ def process_files(excel_file, csv_files, json_files):
         for label, df in csv_data.items():
             for col in df.columns:
                 if col not in ("competitionId", "Day", "launchPeriod", "rightsId", "Source"):
-                    match, missing, mismatch = 0, 0, 0
-                    for i in merged_df.index:
-                        value = merged_df.at[i, f"{col}_{label}"]
-                        if value is None or value == "":
-                            missing += 1
-                        elif col == "clientContentId" and value != merged_df.at[i, "MFL ID"]:
-                            mismatch += 1
-                        else:
-                            match += 1
-                    ws3.append(["CSV", label, col, match, missing, mismatch])
+                    excel_col = col
+                    merged_col = f"{col}_{label}"
+                    matched = merged_df[merged_col].notna().sum()
+                    missing = merged_df[merged_col].isna().sum()
+                    mismatched = (merged_df[excel_col] != merged_df[merged_col]).sum()
+                    ws3.append(["CSV", label, col, matched, missing, mismatched])
         for label, json_df in json_data_by_label.items():
-            filtered = json_df.loc[json_df.index.isin(used_keys)]
-            for field in json_df.columns:
-                total = filtered.shape[0]
-                non_empty = filtered[field].notna().sum()
-                missing = total - non_empty
-                ws3.append(["JSON", label, field, non_empty, missing, "-"])
-
-        # Unmatched Sheets
-        for label, df in unmatched_data.items():
-            ws = wb.create_sheet(f"Unmatched_{label}")
-            for r in dataframe_to_rows(df.reset_index(drop=True), index=False, header=True):
-                ws.append(r)
-
-        # JSON Sheets
-        for label, json_df in json_data_by_label.items():
-            df_reset = json_df.reset_index()
-            filtered = df_reset[df_reset.apply(lambda x: (str(x["overrideId"]).strip(), str(x["date"]).strip()) in used_keys, axis=1)]
-            ws = wb.create_sheet(f"JSON_{label}")
-            for r in dataframe_to_rows(filtered, index=False, header=True):
-                ws.append(r)
+            for col in json_df.columns:
+                matched = merged_df[col].notna().sum()
+                missing = merged_df[col].isna().sum()
+                ws3.append(["JSON", label, col, matched, missing, "-"])
 
         wb.save(output)
         output.seek(0)
-        return output
+        return {"detailed": output, "clean": output}
+
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        print("Error in process_files:", e)
         return None
+
+def merge_files(excel_file, csv_files, json_files):
+    output = process_files(excel_file, csv_files, json_files)
+    return output, None, None
+
+def save_output(merged_df, mismatch_summary, json_diff, filename):
+    if merged_df is not None and hasattr(merged_df, "to_excel"):
+        merged_df.to_excel(filename, index=False)
+    pass
