@@ -7,7 +7,7 @@ from access_control_password import verify_user
 st.set_page_config(page_title="Excel Merge Tool (CSV Only, Roles)", layout="wide")
 st.title("📘 Excel Merge Tool (CSV Only + Roles)")
 
-token = get_user_role()
+token = verify_user()
 if token in [None, "none"]:
     st.stop()
 
