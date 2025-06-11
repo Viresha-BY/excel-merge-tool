@@ -5,18 +5,31 @@ from merge_csv_only import process_files
 from access_control_password import verify_user
 
 st.set_page_config(page_title="Excel Merge Tool (CSV Only, Roles)", layout="wide")
-st.title("📘 Excel Merge Tool (CSV Only + Roles)")
+st.title("🗂️ Excel Merge Tool (CSV Only + Roles)")
 
-token = verify_user()
-if token in [None, "none"]:
+# --- Add login form ---
+with st.form("login_form"):
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    submitted = st.form_submit_button("Login")
+
+if 'authenticated' not in st.session_state:
+    st.session_state['authenticated'] = False
+    st.session_state['role'] = None
+
+if submitted:
+    role = verify_user(username, password)
+    if role:
+        st.session_state['authenticated'] = True
+        st.session_state['role'] = role
+        st.success(f"Logged in as {username} ({role})")
+    else:
+        st.error("Invalid username or password")
+
+if not st.session_state['authenticated']:
     st.stop()
 
-st.markdown(f"**Role:** `{token}`")
-
-if st.button("Logout"):
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
-    st.experimental_rerun()
+# --- rest of your app goes here, user is authenticated ---
 
 st.header("Step 1: Upload Files")
 excel_file = st.file_uploader("Upload Excel File", type=["xlsx"])
