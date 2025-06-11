@@ -1,0 +1,7 @@
+users:
+  - username: Viresh
+    password_hash: $2b$12$1r10uDjJGNBAhoh723mSzezBZUXRn8Lj.1ZCGYVu1EnpCL8jPXaCm   # bcrypt hash!
+    role: admin
+  - username: Akhila
+    password_hash: $2b$12$4GmwOqNcRpoz7eYHmfG0B.GfDz9qC8UxCIin8pSr8oAaxXvoh.NX.
+    role: operator
