@@ -5,39 +5,39 @@ users:
   - username: Akhila
     password_hash: $2b$12$4GmwOqNcRpoz7eYHmfG0B.GfDz9qC8UxCIin8pSr8oAaxXvoh.NX.
     role: operator
-- username: Raghavendra
+  - username: Raghavendra
     password_hash: $2b$12$D7JMjOqT59jtcJmO29QPK.0J6uYmDjrPK0V4Ge2yvNVMTFUZ4wOAW
     role: operator
-- username: Varun
+  - username: Varun
     password_hash: $2b$12$VsD/vvxb6ox7tuuh5oKf.u6KwAdFkEKn.dazZIf.XEzqNSSddRm56
     role: operator
-- username: Shivam
+  - username: Shivam
     password_hash: $2b$12$CYY2rXqUwATG76Ds24uDUu4df20lvmJhCfiMrj6z/05mAhjTh/YgW
     role: operator
-- username: Ajeet
+  - username: Ajeet
     password_hash: $2b$12$PHyf/yU07S4mnMmnaCIIreWRzzR1DRSqs6AA8socRFk/YCYftWS8i
     role: operator
-- username: Sreelekha
+  - username: Sreelekha
     password_hash: $2b$12$TfKRDetQswzyZ4XDhbAA9ub5OXa86NABlPfl7kv2HaP2XyhAHAheK
     role: operator
-- username: Satishkumar 
+  - username: Satishkumar 
     password_hash: $2b$12$/FDZUyqmkrMm0OWMJrHnROmTH6BhylueUyqPrmRNbtnIJIObOCPZm
     role: operator
-- username: Saikumar
+  - username: Saikumar
     password_hash: $2b$12$jtlL6HHKKNP0778FUCT2FOD1Qwq5wK6JekdmE6olRWFQjHeXMCpUS
     role: operator
-- username: Vaishnavi 
+  - username: Vaishnavi 
     password_hash: $2b$12$vUVpeYQUuCr.vJKpwCEOG.grtzsl4tDTXLafXzupgeCmpr6EJu9mS
     role: operator
-- username: Bhavesh
+  - username: Bhavesh
     password_hash: $2b$12$/5C.JScBQNVLonQtVhTneOMdRtDuNH0KMmUVC9V9c4Ouz/nsHORVO
     role: operator
-- username: Akshith
+  - username: Akshith
     password_hash: $2b$12$ozdKt.6LbUBCvBeZIMMTpukpMompCiQKDEEHNx04pxtI68DnAXOzq
     role: operator
-- username: Devendra
+  - username: Devendra
     password_hash: $2b$12$XcHoEsPZo00rrvO.51voH.mjBd9Sf9LTW.qq.1.jlmzfOlAMbqQUO
     role: admin
-- username: Raja
+  - username: Raja
     password_hash: $2b$12$EYmX.iQ0nmGeGLgBTgYC/ehHWcMtIgVkoV7VBeTBjePtLaVghvX7G
     role: admin 
