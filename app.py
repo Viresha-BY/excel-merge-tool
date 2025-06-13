@@ -5,16 +5,17 @@ from merge_csv_only import process_files
 from access_control_password import verify_user
 from validation_logic import style_dataframe
 
-st.set_page_config(page_title="Excel Merge Tool (CSV Only, Roles)", layout="wide")
+st.set_page_config(page_title="Excel & CSV files Merge Comparison Tool", layout="wide")
 
-# ---- SUBSTRINGS: Columns containing these will be hidden from UI ----
+# ---- Columns to hide (case-insensitive substring match) ----
 HIDE_SUBSTRS = [
-    "description", "languageMappingName", "source",
-    "streamStartDateTime", "streamEndDateTime", "tier", "version"
+    "description", "languagemappingname", "source", "eventurl", "cancelled", "rightsId",
+    "streamstartdatetime", "streamenddatetime", "tier", "version", "launchperiod",
 ]
 
 def hide_col(col):
-    return any(substr in col for substr in HIDE_SUBSTRS)
+    col_lower = col.lower()
+    return any(substr in col_lower for substr in HIDE_SUBSTRS)
 
 # ---- SIDEBAR: LOGOUT & USER INFO ----
 with st.sidebar:
@@ -65,7 +66,12 @@ st.markdown("## <span style='color:#1a73e8;font-weight:bold;'>⬆️ Upload Powe
 excel_file = st.file_uploader("", type=["xlsx"], key="excel_file")
 
 st.markdown("## <span style='color:#34a853;font-weight:bold;'>⬆️ Upload All DynamoDB files</span>", unsafe_allow_html=True)
-csv_files = st.file_uploader("", type=["csv"], accept_multiple_files=True, key="csv_files")
+csv_files = st.file_uploader(
+    "",
+    type=["csv"],
+    accept_multiple_files=True,
+    key="csv_files"
+)
 
 # ---- MERGE LOGIC ----
 if role in ["operator", "admin"]:
@@ -77,7 +83,11 @@ if role in ["operator", "admin"]:
                 st.success("✅ Merge complete! Download your files below:")
                 merged_excel_bytes = outputs["detailed"].getvalue()
                 st.session_state["merged_excel_bytes"] = merged_excel_bytes
-                merged_df = pd.read_excel(BytesIO(merged_excel_bytes), sheet_name="Merged Data", dtype=str, keep_default_na=False)
+                merged_df = pd.read_excel(
+                    BytesIO(merged_excel_bytes), 
+                    sheet_name="Merged Data", 
+                    dtype=str, keep_default_na=False
+                )
                 merged_df = merged_df.fillna("")
                 st.session_state["merged_df"] = merged_df
             else:
@@ -118,14 +128,13 @@ if merged_df is not None:
             file_name="validated_output.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-    # The comparison download is built below after selection
 
     tabs = st.tabs(["Merged Data", "Field Comparison Viewer"])
 
     # --- Tab 1: Merged Data (UI, hidden columns) ---
     with tabs[0]:
-    #    st.write("Columns in merged DataFrame (UI):", ui_cols)
-        st.dataframe(style_dataframe(merged_df[ui_cols]), use_container_width=True, height=600)
+        styled_ui = style_dataframe(merged_df[ui_cols])
+        st.dataframe(styled_ui, use_container_width=True, height=600)
 
     # --- Tab 2: Field Comparison (hidden columns) ---
     with tabs[1]:
@@ -150,25 +159,14 @@ if merged_df is not None:
         if not selected_csv_cols:
             st.warning(f"No columns found for CSV field '{sel_csv_field}'. Check your merge or column names.")
         else:
-            df_compare = merged_df[compare_cols].copy()
-            new_colnames = (
-                (["OVERRIDE ID"] if "OVERRIDE ID" in df_compare.columns else []) +
-                ["Excel"] + [col.split("_")[-1] for col in selected_csv_cols]
-            )
-            df_compare_display = df_compare.copy()
-            df_compare_display.columns = new_colnames
-
-            st.dataframe(
-                style_dataframe(df_compare),
-                use_container_width=True,
-                height=600
-            )
+            subset_df = merged_df[compare_cols]
+            styled_subset = style_dataframe(subset_df)
+            st.dataframe(styled_subset, use_container_width=True, height=600)
 
             # --- Download comparison fields (with colors) ---
             output_compare = BytesIO()
-            styled_compare = style_dataframe(df_compare)
             with pd.ExcelWriter(output_compare, engine="openpyxl") as writer:
-                styled_compare.to_excel(writer, index=False, sheet_name="FieldComparison")
+                styled_subset.to_excel(writer, index=False, sheet_name="FieldComparison")
             output_compare.seek(0)
             st.download_button(
                 "📥 Download Selected Fields (Field Comparison, with colors)",
