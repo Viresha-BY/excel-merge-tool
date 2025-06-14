@@ -24,22 +24,18 @@ def in_any_range(value, ranges):
         return False
 
 def match_sdr_override_id(value):
-    if not isinstance(value, str):
-        value = str(value)
-    patterns = [
-        r"^[1][48]\d{2}$",      # 1401–1460, 1801–1860, etc.
-        r"^[1][48]8[1-9]$",     # 14881–14889, 18881–18889, etc.
-        r"^[1][48]9[0]$",       # 14890, 18890
-        r"^2[48]4[1-9]$",       # 24841–24849, 28441–28449, etc.
-        r"^2[48]5[0-9]$",       # 24850–24859, 28450–28459, etc.
-        r"^4[48]0[1-9]$",       # 4401–4409, 4801–4809
-        r"^4[48]1[0-9]$",       # 4410–4419, 4810–4819
-        r"^4[48]2[0-9]$",       # 4420–4429, 4820–4829
-        r"^4[48]3[0-9]$",       # 4430–4439, 4830–4839
-        r"^4[48]4[0-9]$",       # 4440–4449, 4840–4849
-        r"^4[48]5[0-4]$",       # 4450–4454, 4850–4854
-    ]
-    return any(re.match(p, value) for p in patterns)
+    try:
+        val = int(value)
+    except (TypeError, ValueError):
+        return False
+
+    return (
+        1601 <= val <= 1660 or
+        1681 <= val <= 1690 or
+        2641 <= val <= 2660 or
+        4601 <= val <= 4654 or
+        (1000 <= val <= 9999 and (val // 100) % 10 == 5)  # x5xx pattern
+    )
 
 def match_hdr_override_id(value):
     try:
