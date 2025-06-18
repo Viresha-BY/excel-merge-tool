@@ -10,7 +10,7 @@ st.set_page_config(page_title="Excel & CSV files Merge Comparison Tool", layout=
 # ---- Columns to hide (case-insensitive substring match) ----
 HIDE_SUBSTRS = [
     "description", "languagemappingname", "source", "eventurl", "cancelled", "rightsId",
-    "streamstartdatetime", "streamenddatetime", "tier", "version", "launchperiod",
+    "streamstartdatetime", "streamenddatetime", "version", "launchperiod",
 ]
 
 def hide_col(col):
